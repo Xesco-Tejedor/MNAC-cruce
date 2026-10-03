@@ -66,7 +66,9 @@ async function pick(i){const w=works[i];cur=w;document.querySelectorAll('.it').f
  try{const d=await parse(w.href);if(cur!==w)return;const t=s=>[...d.querySelectorAll(s)].map(x=>x.textContent.replace(/\s+/g,' ').trim()).filter(Boolean);
   w.artistName=(t('.field-name-field-piece-authors-author')[0])||'';w.info=t('.field-name-field-piece-info-content');
   const tech=t('.group_piece_technical')[0]||'';w.dept=(tech.match(/^(Art [A-Za-zÀ-ÿ]+|Romànic|Gòtic|Renaixement i Barroc|Dibuixos i gravats|Numismàtica|Fotografia)/)||[''])[0];
-  w.big=(d.querySelector('meta[property="og:image"]')||{}).content||w.img;}catch(err){}
+  const gallery=d.querySelector('.slider-mobile img[src*="/images/art_piece/"]');
+  w.big=gallery?new URL(gallery.getAttribute('src'),w.href).href:(d.querySelector('meta[property="og:image"]')||{}).content||'';
+  if(w.big){const thumb=document.querySelector(`.it[data-i="${i}"] img`);if(thumb)thumb.src=w.big;}}catch(err){}
  if(cur===w)render();}
 function render(){const w=cur,ar=w.artistName||w.artist,ti=w.title;
  const qs={both:[ar,ti].filter(Boolean).join(' '),artist:ar,title:ti};const q=qs[mode]||qs.both,eq=encodeURIComponent(q);
