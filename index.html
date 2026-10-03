@@ -71,7 +71,7 @@ async function pick(i){const w=works[i];cur=w;document.querySelectorAll('.it').f
   if(w.big){const thumb=document.querySelector(`.it[data-i="${i}"] img`);if(thumb)thumb.src=w.big;}}catch(err){}
  if(cur===w)render();}
 function render(){const w=cur,ar=w.artistName||w.artist,ti=w.title;
- const qs={both:[ar,ti].filter(Boolean).join(' '),artist:ar,title:ti};const q=qs[mode]||qs.both,eq=encodeURIComponent(q);
+ const nz=x=>(x||'').trim(),tl=nz(ti).toLowerCase(),al=nz(ar).toLowerCase();const qs={both:(al&&tl.includes(al))?nz(ti):[nz(ar),nz(ti)].filter(Boolean).join(' '),artist:nz(ar)||nz(ti),title:nz(ti)||nz(ar)};const q=qs[mode]||qs.both,eq=encodeURIComponent(q);
  const chip=(m,l)=>`<span class="chip${mode===m?' on':''}" data-m="${m}" role="button">${l}</span>`;
  $('libros').innerHTML=`${w.big?`<img class="big" src="${esc(w.big)}" alt="">`:''}<h3 style="margin:8px 0 0">${esc(ti)}</h3>
  <div class="meta">${esc(ar)}${w.info&&w.info.length?'<br>'+w.info.map(esc).join(' · '):''}</div>
@@ -82,6 +82,7 @@ function render(){const w=cur,ar=w.artistName||w.artist,ti=w.title;
  <a class="btn sec" target="_blank" rel="noopener" href="https://ccuc.csuc.cat/discovery/search?query=any,contains,${eq}&vid=34CSUC_NETWORK:CSUC_CCUC_UNION&tab=TOT&search_scope=DiscoveryNetwork&lang=ca&offset=0">Abrir catálogo CCUC ↗</a>
  <a class="btn sec" target="_blank" rel="noopener" href="https://mdc.csuc.cat/digital/collection/LlibresMNAC/search/searchterm/${eq}">Abrir libros digitalizados ↗</a>
  <a class="btn sec" target="_blank" rel="noopener" href="https://mdc.csuc.cat/digital/search/searchterm/${eq}">Buscar en todo el MDC ↗</a></div>
+ <p class="stat">CCUC: cargando, puede tardar unos segundos en mostrar resultados.</p>
  <p class="stat">Si «Abrir libros digitalizados» no da resultados, es normal: esa colección del MNAC es muy pequeña. Prueba «Buscar en todo el MDC».</p>
  <p class="note">Si CCUC no muestra resultados, <a target="_blank" rel="noopener" href="https://ccuc.csuc.cat/discovery/search?vid=34CSUC_NETWORK%3ACSUC_CCUC_UNION&lang=ca">abre su buscador</a> y escribe <strong>${esc(q)}</strong>. Usa «Tot» y pulsa la lupa. Puedes filtrar por tipo de recurso después.</p>
  <p class="note">Los resultados de libros se abren en otra pestaña, no dentro de esta app. Si el catálogo se queda buscando dentro de WhatsApp o del portfolio, abre la página en Safari, Chrome o Firefox y vuelve a pulsar el enlace.</p>
