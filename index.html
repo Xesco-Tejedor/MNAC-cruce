@@ -46,7 +46,7 @@ $('f').onsubmit=async e=>{e.preventDefault();const q=$('q').value.trim();if(!q)r
   const gs=[...d.querySelectorAll('.group-search-result')];if(!gs.length)break;
   for(const g of gs){const a=g.querySelector('a[href*="/colleccio/"]');if(!a)continue;const h=a.getAttribute('href');if(seen.has(h))continue;seen.add(h);
    const t=g.querySelector('h2'),im=g.parentElement.querySelector('img');
-   const w={href:h,title:t?t.textContent.trim():'Obra',img:im?im.src:'',artist:(h.split('/')[4]||'').replace(/-/g,' ')};works.push(w);
+   const w={href:h,title:t?t.textContent.trim():'Obra',img:im?im.src:'',artist:(h.split('/')[h.split('/').indexOf('colleccio')+2]||'').replace(/-/g,' ')};works.push(w);
    $('obras').insertAdjacentHTML('beforeend',`<div class="it" data-i="${works.length-1}">${w.img?`<img src="${esc(w.img)}" alt="" loading="lazy">`:''}<div><b>${esc(w.title)}</b><small>${esc(w.artist)}</small></div></div>`);}
   $('stat').textContent=`${works.length} obras (página ${p+1})…`;await sleep(350);}
  }catch(err){$('stat').textContent='Error al consultar el MNAC; mostrando lo cargado.';}
