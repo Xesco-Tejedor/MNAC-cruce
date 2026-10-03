@@ -119,7 +119,6 @@ function exportPDF(){
  text(w.title,20,[37,31,33],true);
  text(artist||'Artista no identificado',12,[88,82,84]);
  if(w.info&&w.info.length){heading('Datos de la obra');w.info.forEach(info=>text(info,10));}
- if(w.dept)text('Departamento: '+w.dept,10,[88,82,84]);
  heading('Ficha de la colección');link('Abrir ficha en el MNAC',w.href);
  heading('Búsqueda seleccionada');
  const modes={artist:'Solo artista',both:'Artista + obra',title:'Solo título'};
