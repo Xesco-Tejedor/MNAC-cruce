@@ -69,6 +69,16 @@ async function pick(i){const w=works[i];cur=w;document.querySelectorAll('.it').f
  try{const d=await parse(w.href);if(cur!==w)return;const t=s=>[...d.querySelectorAll(s)].map(x=>x.textContent.replace(/\s+/g,' ').trim()).filter(Boolean);
   w.artistName=(t('.field-name-field-piece-authors-author')[0])||'';w.info=t('.field-name-field-piece-info-content');
   const tech=t('.group_piece_technical')[0]||'';w.dept=(tech.match(/^(Art [A-Za-zÀ-ÿ]+|Romànic|Gòtic|Renaixement i Barroc|Dibuixos i gravats|Numismàtica|Fotografia)/)||[''])[0];
+  const tg=d.querySelector('.group_piece_technical');w.f={};
+  if(tg){const feats=[...tg.querySelectorAll('.ds-feature')].map(x=>x.textContent.replace(/\s+/g,' ').trim()).filter(Boolean);
+   for(const x of feats){if(/^N[úu]m\. del cat/i.test(x))w.f.cat=x.replace(/^[^:]*:\s*/,'');else if(/\b(cm|mm|m)\b/.test(x)&&/\d/.test(x)&&/x/.test(x))w.f.dim=x;else if(/Adquisici|Dip[òo]sit|Donaci|Llegat|Compra|Ingr[eé]s/i.test(x))w.f.acq=x;else if(/\d{3,4}|segle|c\./i.test(x)&&!w.f.date)w.f.date=x;else if(!w.f.dept)w.f.dept=x;}
+   const own=[...tg.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent.replace(/\s+/g,' ').trim()).filter(Boolean);w.f.disc=own[0]||'';}
+  w.f.dept=w.f.dept||w.dept||'';
+  w.f.life='';const ab=d.querySelector('.field-name-field-piece-authors-author');if(ab){const tw=d.createTreeWalker(d.body,4);let n,after=false;while((n=tw.nextNode())){if(!after){if(ab.contains(n))after=true;continue;}const x=n.textContent.replace(/\s+/g,' ').trim();if(/^[^,]{2,40},\s*(c\.\s*|ca\.\s*)?\d{3,4}\s*-\s*\d{0,4}$/.test(x)||/^(c\.\s*|ca\.\s*)?\d{3,4}\s*-\s*\d{3,4}$/.test(x)){w.f.life=x;break;}}}
+  w.f.century=(w.info||[]).filter(x=>/^Segle/i.test(x)).map(x=>x.replace(/^[^:]*:\s*/,'')).join(', ');
+  w.f.themes=(w.info||[]).filter(x=>/^Tema/i.test(x)).map(x=>x.replace(/^[^:]*:\s*/,'')).join(', ');
+  w.f.tech=(w.info||[]).filter(x=>!/^(Segle|Tema)/i.test(x)).join(', ');
+  w.f.copy=(tech.match(/Copyright:\s*(.+)$/)||['',''])[1].trim();
   const gallery=d.querySelector('.slider-mobile img[src*="/images/art_piece/"]');
   w.big=gallery?new URL(gallery.getAttribute('src'),w.href).href:(d.querySelector('meta[property="og:image"]')||{}).content||'';
   if(w.big){const thumb=document.querySelector(`.it[data-i="${i}"] img`);if(thumb)thumb.src=w.big;}}catch(err){}
@@ -94,55 +104,72 @@ function render(){const w=cur,ar=w.artistName||w.artist,ti=w.title;
  <details class="note"><summary>¿No carga? Búsqueda manual</summary><p>Copia este término: <strong>${esc(q)}</strong>. Abre uno de los catálogos y pégalo en su buscador:</p><div class="row"><a class="btn sec" target="_blank" rel="noopener" href="https://biblioteca.museunacional.cat/discovery/search?vid=34CSUC_INSTB%3AMNAC&lang=ca">Inicio OPAC</a><a class="btn sec" target="_blank" rel="noopener" href="https://ccuc.csuc.cat/discovery/search?vid=34CSUC_NETWORK%3ACSUC_CCUC_UNION&lang=ca">Inicio CCUC</a><a class="btn sec" target="_blank" rel="noopener" href="https://mdc.csuc.cat/digital/collection/LlibresMNAC">Inicio libros digitalizados</a></div></details>`;
  $('exportPdf').onclick=exportPDF;
  $('chips').onclick=e=>{const c=e.target.closest('.chip');if(c){mode=c.dataset.m;render();}};}
-function exportPDF(){
+async function loadImg(url){
+ if(!url)return null;
+ try{const r=await fetch(url);if(!r.ok)return null;const blob=await r.blob();const bu=URL.createObjectURL(blob);
+  const img=await new Promise((ok,ko)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=ko;i.src=bu;});
+  const k=Math.min(1,1400/Math.max(img.naturalWidth,img.naturalHeight)),c=document.createElement('canvas');c.width=Math.round(img.naturalWidth*k);c.height=Math.round(img.naturalHeight*k);
+  c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(bu);
+  return{data:c.toDataURL('image/jpeg',.85),w:c.width,h:c.height};}catch(err){return null;}
+}
+async function exportPDF(){
  const result=pdfResult;if(!result)return;
  const status=$('pdfStatus');
  if(!window.jspdf){status.textContent='No se ha podido cargar el generador PDF. Revisa la conexión y recarga la página.';return;}
+ status.textContent='Preparando PDF con la imagen de la obra…';
  try{
- const {work:w,artist,query,mode,mdcQuery}=result;
+ const {work:w,artist,query,mode,mdcQuery}=result;const f=w.f||{};
+ const im=await loadImg(w.big||w.img);
  const doc=new window.jspdf.jsPDF({orientation:'portrait',unit:'mm',format:PDF_FORMAT});
  const width=doc.internal.pageSize.getWidth(),height=doc.internal.pageSize.getHeight(),margin=18,usable=width-margin*2;
- let y=18;
- const date=new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'});
+ let y=16;
+ const RED=[200,16,46],INK=[24,24,27],GREY=[110,110,118],LIGHT=[165,165,172];
+ const date=new Date().toLocaleDateString('es-ES',{day:'numeric',month:'long',year:'numeric'});
  const clean=s=>String(s||'').replace(/[\u2018\u2019]/g,"'").replace(/[\u201c\u201d]/g,'"').replace(/[\u2013\u2014]/g,'-').replace(/\u2026/g,'...');
  const space=n=>{if(y+n>height-22){doc.addPage();y=20;}};
- const text=(s,size=11,color=[37,31,33],bold=false)=>{
- doc.setFont('helvetica',bold?'bold':'normal');doc.setFontSize(size);doc.setTextColor(...color);
- const lines=doc.splitTextToSize(clean(s),usable);if(lines.length*(size*.48+1.5)+2<height-42)space(lines.length*(size*.48+1.5)+2);for(const line of lines){space(size*.48+1.5);doc.text(line,margin,y);y+=size*.48+1.5;}y+=2;};
- const heading=s=>{y+=4;space(20);text(s,13,[37,31,33],true);};
+ const text=(s,size=11,color=INK,style='normal',font='helvetica',lh=.48)=>{
+ doc.setFont(font,style);doc.setFontSize(size);doc.setTextColor(...color);
+ const lines=doc.splitTextToSize(clean(s),usable);for(const line of lines){space(size*lh+1.5);doc.text(line,margin,y);y+=size*lh+1.5;}y+=2;};
+ const heading=s=>{y+=5;space(24);text(s.toUpperCase(),9,RED,'bold');doc.setDrawColor(...INK);doc.setLineWidth(.3);doc.line(margin,y-2,width-margin,y-2);y+=2;};
  const link=(label,url)=>{space(12);doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(22,106,91);doc.textWithLink(label,margin,y,{url});y+=7;};
- doc.setProperties({title:w.title+' | MNAC-cruïlla',subject:'Obra y búsquedas bibliográficas',author:'MNAC-cruïlla',creator:'MNAC-cruïlla'});
- text('MNAC-cruïlla',11,[22,106,91],true);
- text('Obra y búsquedas bibliográficas',22,[37,31,33],true);
- text('Exportado el '+date+' · DIN A4',9,[88,82,84]);
- doc.setDrawColor(224,227,225);doc.line(margin,y,width-margin,y);y+=10;
- text(w.title,20,[37,31,33],true);
- text(artist||'Artista no identificado',12,[88,82,84]);
- if(w.info&&w.info.length){heading('Datos de la obra');w.info.forEach(info=>text(info,10));}
- heading('Ficha de la colección');link('Abrir ficha en el MNAC',w.href);
- heading('Búsqueda seleccionada');
- const modes={artist:'Solo artista',both:'Artista + obra',title:'Solo título'};
- text('Criterio: '+modes[mode],10,[88,82,84]);text(query,12,[37,31,33],true);
+ doc.setProperties({title:w.title+' | MNAC-cruïlla',subject:'Obra consultada',author:'MNAC-cruïlla',creator:'MNAC-cruïlla'});
+ // masthead
+ doc.setFont('helvetica','bold');doc.setFontSize(13);doc.setTextColor(...INK);doc.text('MNAC-cruïlla',margin,y);
+ doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...GREY);doc.text(clean(date),width-margin,y,{align:'right'});
+ y+=3;doc.setDrawColor(...RED);doc.setLineWidth(1);doc.line(margin,y,width-margin,y);y+=9;
+ // kicker, headline, standfirst
+ const kicker=[f.dept,f.disc].filter(Boolean).join(' · ')||'Colección MNAC';
+ text(kicker.toUpperCase(),9,RED,'bold');y+=1;
+ text(w.title||'Título no disponible',27,INK,'bold','times',.5);
+ text([artist||'Artista no identificado',f.life].filter(Boolean).join(' · '),13,GREY,'normal','times');
+ doc.setDrawColor(224,224,228);doc.setLineWidth(.2);doc.line(margin,y,width-margin,y);y+=5;
+ text('Por MNAC-cruïlla · Fuente: Museu Nacional d\'Art de Catalunya · '+date,8.5,GREY);
+ // hero image
+ if(im){let iw=usable,ih=iw*im.h/im.w;const maxh=120;if(ih>maxh){ih=maxh;iw=ih*im.w/im.h;}space(ih+14);doc.addImage(im.data,'JPEG',margin+(usable-iw)/2,y,iw,ih);y+=ih+3;}
+ else{space(40);doc.setDrawColor(...LIGHT);doc.setFillColor(244,244,246);doc.rect(margin,y,usable,34,'FD');doc.setFont('helvetica','italic');doc.setFontSize(10);doc.setTextColor(...LIGHT);doc.text('[ Imagen de la obra no disponible ]',width/2,y+18,{align:'center'});y+=37;}
+ text('Imagen: '+(w.title||'[ sin título ]')+(artist?', '+artist:'')+'. © Museu Nacional d\'Art de Catalunya'+(f.copy?' ('+f.copy+')':'')+'.',8,GREY,'italic','times');
+ // fact sheet with placeholders
+ heading('Ficha de la obra');
+ const rows=[['Título',w.title],['Artista',artist],['Vida del artista',f.life],['Departamento',f.dept],['Disciplina',f.disc],['Técnica',f.tech],['Fecha',f.date],['Dimensiones',f.dim],['Siglo',f.century],['Temas',f.themes],['Ingreso',f.acq],['N.º de catálogo',f.cat],['Derechos',f.copy]];
+ for(const [k,v] of rows){const val=clean(v||'').trim();const lines=doc.splitTextToSize(val||'[ sin dato ]',usable-42);const hh=Math.max(6,lines.length*5+2);space(hh);
+  doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...GREY);doc.text(k.toUpperCase(),margin,y);
+  doc.setFont('times',val?'normal':'italic');doc.setFontSize(11);doc.setTextColor(...(val?INK:LIGHT));doc.text(lines,margin+42,y);
+  y+=hh-1;doc.setDrawColor(235,235,238);doc.setLineWidth(.15);doc.line(margin,y,width-margin,y);y+=3.5;}
+ heading('Ficha en el museo');link('Abrir ficha en el MNAC',w.href);
  heading('Libros y publicaciones');
+ const modes={artist:'Solo artista',both:'Artista + obra',title:'Solo título'};
+ text('Búsqueda seleccionada ('+modes[mode]+'): '+query,10,INK,'bold');
  const eq=encodeURIComponent(query),meq=encodeURIComponent(mdcQuery);
  link('OPAC de la biblioteca del MNAC','https://biblioteca.museunacional.cat/discovery/search?query=any,contains,'+eq+'&tab=LibraryCatalog&search_scope=MNAC_P&vid=34CSUC_INSTB:MNAC&lang=ca');
  link('Catálogo colectivo CCUC','https://ccuc.csuc.cat/discovery/search?query=any,contains,'+eq+'&vid=34CSUC_NETWORK:CSUC_CCUC_UNION&tab=TOT&search_scope=DiscoveryNetwork&lang=ca&offset=0');
  link('Libros digitalizados del MNAC (MDC)','https://mdc.csuc.cat/digital/collection/LlibresMNAC/search/searchterm/'+meq);
  link('Buscar en todo el MDC','https://mdc.csuc.cat/digital/search/searchterm/'+meq);
- text('Enlaces pulsables: abren búsquedas en el navegador. No son una lista de libros encontrados ni una comprobación de disponibilidad.',9,[88,82,84]);
- space(62);heading('Cómo consultar los catálogos');
- text('CCUC puede tardar unos segundos. Si no aparecen resultados, abre su buscador, escribe el término indicado, selecciona "Tot" y pulsa la lupa. Después puedes filtrar por tipo de recurso.',10);
- text('La colección digitalizada del MNAC es pequeña. Si no hay coincidencias, prueba la búsqueda en todo el MDC. Si un enlace no funciona dentro de WhatsApp, ábrelo en Safari, Chrome o Firefox.',10);
- link('Inicio OPAC MNAC','https://biblioteca.museunacional.cat/discovery/search?vid=34CSUC_INSTB%3AMNAC&lang=ca');
- link('Inicio CCUC','https://ccuc.csuc.cat/discovery/search?vid=34CSUC_NETWORK%3ACSUC_CCUC_UNION&lang=ca');
- link('Inicio libros digitalizados','https://mdc.csuc.cat/digital/collection/LlibresMNAC');
- heading('Sobre este documento');
- text('Prototipo independiente, no oficial del MNAC. Exporta los datos disponibles de la obra y las búsquedas del apartado 2 en el momento de pulsar el botón. Los catálogos se consultan en sus propias webs; no se descargan ni se extraen sus resultados.',9,[88,82,84]);
- text('La imagen de la obra se consulta en su ficha original del MNAC. Este PDF conserva los datos y los enlaces, sin reproducir la imagen.',9,[88,82,84]);
- for(let p=1;p<=doc.getNumberOfPages();p++){doc.setPage(p);doc.setDrawColor(224,227,225);doc.line(margin,height-17,width-margin,height-17);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(88,82,84);doc.text('MNAC-cruïlla · Prototipo',margin,height-11);doc.text(p+' / '+doc.getNumberOfPages(),width-margin,height-11,{align:'right'});}
- const filename='cruilla-'+w.title.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').slice(0,70)+'.pdf';
- doc.save(filename);status.textContent='PDF generado. Si tu navegador lo abre en vez de descargarlo, usa Compartir o Guardar en archivos.';
- }catch(err){status.textContent='No se ha podido generar el PDF. Vuelve a intentarlo en Chrome, Safari o Firefox.';}
+ text('Enlaces pulsables que abren búsquedas en el navegador; no son una lista de libros encontrados ni una comprobación de disponibilidad. CCUC puede tardar unos segundos; si no hay resultados, escribe el término en su buscador, elige "Tot" y pulsa la lupa.',8.5,GREY);
+ text('Prototipo independiente, no oficial del MNAC. Datos e imagen tomados de la ficha pública de la colección en el momento de exportar.',8.5,GREY);
+ for(let p=1;p<=doc.getNumberOfPages();p++){doc.setPage(p);doc.setDrawColor(224,224,228);doc.setLineWidth(.2);doc.line(margin,height-17,width-margin,height-17);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...GREY);doc.text('MNAC-cruïlla · Prototipo',margin,height-11);doc.text(p+' / '+doc.getNumberOfPages(),width-margin,height-11,{align:'right'});}
+ const filename='cruilla-'+(w.title||'obra').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').slice(0,70)+'.pdf';
+ doc.save(filename);status.textContent=im?'PDF generado con la imagen de la obra. Si tu navegador lo abre en vez de descargarlo, usa Compartir o Guardar en archivos.':'PDF generado, pero la imagen no se pudo cargar (aparece un marcador).';
+ }catch(err){console.error(err);status.textContent='No se ha podido generar el PDF. Vuelve a intentarlo en Chrome, Safari o Firefox.';}
 }
 
 </script></main></body></html>
