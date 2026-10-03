@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MNAC · Obras y biblioteca</title>
+<style>
+:root{--bg:#0f1115;--card:#181b22;--tx:#e8e8ea;--mut:#9aa0ab;--ac:#c8102e;--ln:#2a2f3a}
+*{box-sizing:border-box}body{margin:0;font:16px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+main{max-width:900px;margin:0 auto;padding:20px}
+h1{font-size:1.5rem;margin:.2em 0}p.sub{color:var(--mut);margin-top:0}
+form{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}
+input{flex:1;min-width:200px;padding:12px;border-radius:8px;border:1px solid var(--ln);background:var(--card);color:var(--tx);font-size:1rem}
+button,a.btn{padding:12px 16px;border-radius:8px;border:0;background:var(--ac);color:#fff;font-size:1rem;cursor:pointer;text-decoration:none;display:inline-block}
+a.btn.sec{background:#2a2f3a}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:700px){.cols{grid-template-columns:1fr}}
+section{background:var(--card);border:1px solid var(--ln);border-radius:12px;padding:14px}
+h2{font-size:1.1rem;margin:0 0 8px}
+.it{display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--ln)}.it img{width:64px;height:64px;object-fit:cover;border-radius:6px}
+.it a{color:#fff}.it small{color:var(--mut);display:block}
+.note{color:var(--mut);font-size:.85rem;margin-top:14px}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+</style></head><body><main>
+<h1>MNAC: obras + biblioteca</h1>
+<p class="sub">Busca un término (artista, obra, tema) y ve a la vez las obras de la colección del MNAC y los enlaces a los catálogos de libros y publicaciones.</p>
+<form id="f"><input id="q" placeholder="Ej.: Ramon Casas, Gaudí, Romànic" required><button>Buscar</button></form>
+<div class="cols">
+<section><h2>Obras de la colección (MNAC)</h2><div id="obras">Escribe un término.</div></section>
+<section><h2>Libros y publicaciones</h2><div id="libros">Escribe un término.</div></section>
+</div>
+<p class="note">Las obras se consultan en vivo en museunacional.cat. El catálogo de la biblioteca (OPAC) y el catálogo colectivo CCUC no permiten consultas automáticas según su robots.txt, así que se abren con tu término en su propio buscador.</p>
+<script>
+const $=id=>document.getElementById(id), esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+$('f').onsubmit=async e=>{e.preventDefault();const q=$('q').value.trim();if(!q)return;
+ const eq=encodeURIComponent(q);
+ $('libros').innerHTML=`<p>Abre la búsqueda de «${esc(q)}» en:</p><div class="row">
+ <a class="btn" target="_blank" rel="noopener" href="https://biblioteca.museunacional.cat/discovery/search?query=any,contains,${eq}&tab=Everything&search_scope=MyInst_and_CI&vid=34CSUC_INSTB:MNAC&lang=ca">Biblioteca MNAC (OPAC)</a>
+ <a class="btn sec" target="_blank" rel="noopener" href="https://ccuc.csuc.cat/discovery/search?query=any,contains,${eq}&vid=34CSUC_NETWORK:CSUC_CCUC_UNION">Catálogo colectivo CCUC</a>
+ <a class="btn sec" target="_blank" rel="noopener" href="https://mdc.csuc.cat/digital/collection/LlibresMNAC/search/searchterm/${eq}">Libros digitalizados MNAC</a></div>`;
+ $('obras').textContent='Buscando…';
+ try{
+  const r=await fetch('https://www.museunacional.cat/ca/search/content/'+eq);
+  const d=new DOMParser().parseFromString(await r.text(),'text/html');
+  const out=[];
+  d.querySelectorAll('.group-search-result').forEach(g=>{
+   const a=g.querySelector('a[href*="/colleccio/"]');if(!a)return;
+   const t=g.querySelector('h2'),im=g.parentElement.querySelector('img');
+   out.push(`<div class="it">${im?`<img src="${esc(im.src)}" alt="">`:''}<div><a target="_blank" rel="noopener" href="https://www.museunacional.cat${esc(a.getAttribute('href'))}">${esc(t?t.textContent.trim():'Obra')}</a></div></div>`);});
+  $('obras').innerHTML=out.length?out.join(''):'<p>Sin obras de la colección para este término. Prueba en catalán o con el apellido del artista.</p>';
+  $('obras').insertAdjacentHTML('beforeend',`<div class="row"><a class="btn sec" target="_blank" rel="noopener" href="https://www.museunacional.cat/ca/search/content/${eq}">Ver todos en museunacional.cat</a></div>`);
+ }catch(err){$('obras').innerHTML=`<p>No se pudo consultar el MNAC desde el navegador.</p><div class="row"><a class="btn sec" target="_blank" rel="noopener" href="https://www.museunacional.cat/ca/search/content/${eq}">Abrir búsqueda en museunacional.cat</a></div>`;}
+};
+</script></main></body></html>
