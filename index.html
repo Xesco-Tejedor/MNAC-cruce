@@ -33,10 +33,13 @@ h2{font-size:1.1rem;margin:0 0 8px}
 <section><h2>2. Libros y publicaciones de la obra elegida</h2><div id="libros">Elige una obra de la lista.</div></section>
 </div>
 <p class="note">Las obras se consultan en vivo en museunacional.cat, página a página y con pausas, solo cuando pulsas Buscar. El catálogo de la biblioteca (OPAC) y el colectivo CCUC no permiten consultas automáticas según su robots.txt, así que se abren con los datos de la obra en su propio buscador.</p>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous"></script>
 <script>
 const $=id=>document.getElementById(id),esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const B='https://www.museunacional.cat',sleep=ms=>new Promise(r=>setTimeout(r,ms)),MAXP=40;
 let run=0,works=[],cur=null,mode='artist';
+const PDF_FORMAT='a4'; // Único ajuste del tamaño de página.
+let pdfResult=null;
 const workURL=href=>{
  const raw=String(href).trim().replace(/^https?\/\//i,'https://');
  const url=new URL(raw,B);
@@ -45,7 +48,7 @@ const workURL=href=>{
 };
 const parse=async u=>new DOMParser().parseFromString(await (await fetch(u)).text(),'text/html');
 $('f').onsubmit=async e=>{e.preventDefault();const q=$('q').value.trim();if(!q)return;
- const my=++run;works=[];cur=null;$('obras').innerHTML='';$('libros').textContent='Elige una obra de la lista.';$('stat').textContent='Buscando…';
+ const my=++run;works=[];cur=null;pdfResult=null;$('obras').innerHTML='';$('libros').textContent='Elige una obra de la lista.';$('stat').textContent='Buscando…';
  const seen=new Set();let p=0;
  try{for(;p<MAXP;p++){
   const d=await parse(B+'/ca/search/content/'+encodeURIComponent(q)+(p?'?page='+p:''));if(my!==run)return;
@@ -72,6 +75,7 @@ async function pick(i){const w=works[i];cur=w;document.querySelectorAll('.it').f
  if(cur===w)render();}
 function render(){const w=cur,ar=w.artistName||w.artist,ti=w.title;
  const nz=x=>(x||'').trim(),tl=nz(ti).toLowerCase(),al=nz(ar).toLowerCase();const qs={both:(al&&tl.includes(al))?nz(ti):[nz(ar),nz(ti)].filter(Boolean).join(' '),artist:nz(ar)||nz(ti),title:nz(ti)||nz(ar)};const q=qs[mode]||qs.both,eq=encodeURIComponent(q);const mq=mode==='both'?(nz(ti)||nz(ar)):q,meq=encodeURIComponent(mq.replace(/\u00b7/g,'\u00b7'));
+ pdfResult={work:w,artist:ar,query:q,mode,mdcQuery:mq};
  const chip=(m,l)=>`<span class="chip${mode===m?' on':''}" data-m="${m}" role="button">${l}</span>`;
  $('libros').innerHTML=`${w.big?`<img class="big" src="${esc(w.big)}" alt="">`:''}<h3 style="margin:8px 0 0">${esc(ti)}</h3>
  <div class="meta">${esc(ar)}${w.info&&w.info.length?'<br>'+w.info.map(esc).join(' · '):''}</div>
@@ -82,10 +86,64 @@ function render(){const w=cur,ar=w.artistName||w.artist,ti=w.title;
  <a class="btn sec" target="_blank" rel="noopener" href="https://ccuc.csuc.cat/discovery/search?query=any,contains,${eq}&vid=34CSUC_NETWORK:CSUC_CCUC_UNION&tab=TOT&search_scope=DiscoveryNetwork&lang=ca&offset=0">Abrir catálogo CCUC ↗</a>
  <a class="btn sec" target="_blank" rel="noopener" href="https://mdc.csuc.cat/digital/collection/LlibresMNAC/search/searchterm/${meq}">Abrir libros digitalizados ↗</a>
  <a class="btn sec" target="_blank" rel="noopener" href="https://mdc.csuc.cat/digital/search/searchterm/${meq}">Buscar en todo el MDC ↗</a></div>
+ <div class="row"><button type="button" id="exportPdf">Exportar resultado a PDF · DIN A4</button></div><p id="pdfStatus" class="stat" aria-live="polite"></p>
  <p class="stat">CCUC: cargando, puede tardar unos segundos en mostrar resultados.</p>
  <p class="stat">Si «Abrir libros digitalizados» no da resultados, es normal: esa colección del MNAC es muy pequeña. Prueba «Buscar en todo el MDC».</p>
  <p class="note">Si CCUC no muestra resultados, <a target="_blank" rel="noopener" href="https://ccuc.csuc.cat/discovery/search?vid=34CSUC_NETWORK%3ACSUC_CCUC_UNION&lang=ca">abre su buscador</a> y escribe <strong>${esc(q)}</strong>. Usa «Tot» y pulsa la lupa. Puedes filtrar por tipo de recurso después.</p>
  <p class="note">Los resultados de libros se abren en otra pestaña, no dentro de esta app. Si el catálogo se queda buscando dentro de WhatsApp o del portfolio, abre la página en Safari, Chrome o Firefox y vuelve a pulsar el enlace.</p>
  <details class="note"><summary>¿No carga? Búsqueda manual</summary><p>Copia este término: <strong>${esc(q)}</strong>. Abre uno de los catálogos y pégalo en su buscador:</p><div class="row"><a class="btn sec" target="_blank" rel="noopener" href="https://biblioteca.museunacional.cat/discovery/search?vid=34CSUC_INSTB%3AMNAC&lang=ca">Inicio OPAC</a><a class="btn sec" target="_blank" rel="noopener" href="https://ccuc.csuc.cat/discovery/search?vid=34CSUC_NETWORK%3ACSUC_CCUC_UNION&lang=ca">Inicio CCUC</a><a class="btn sec" target="_blank" rel="noopener" href="https://mdc.csuc.cat/digital/collection/LlibresMNAC">Inicio libros digitalizados</a></div></details>`;
+ $('exportPdf').onclick=exportPDF;
  $('chips').onclick=e=>{const c=e.target.closest('.chip');if(c){mode=c.dataset.m;render();}};}
+function exportPDF(){
+ const result=pdfResult;if(!result)return;
+ const status=$('pdfStatus');
+ if(!window.jspdf){status.textContent='No se ha podido cargar el generador PDF. Revisa la conexión y recarga la página.';return;}
+ try{
+ const {work:w,artist,query,mode,mdcQuery}=result;
+ const doc=new window.jspdf.jsPDF({orientation:'portrait',unit:'mm',format:PDF_FORMAT});
+ const width=doc.internal.pageSize.getWidth(),height=doc.internal.pageSize.getHeight(),margin=18,usable=width-margin*2;
+ let y=18;
+ const date=new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'});
+ const clean=s=>String(s||'').replace(/[\u2018\u2019]/g,"'").replace(/[\u201c\u201d]/g,'"').replace(/[\u2013\u2014]/g,'-').replace(/\u2026/g,'...');
+ const space=n=>{if(y+n>height-22){doc.addPage();y=20;}};
+ const text=(s,size=11,color=[37,31,33],bold=false)=>{
+ doc.setFont('helvetica',bold?'bold':'normal');doc.setFontSize(size);doc.setTextColor(...color);
+ const lines=doc.splitTextToSize(clean(s),usable);if(lines.length*(size*.48+1.5)+2<height-42)space(lines.length*(size*.48+1.5)+2);for(const line of lines){space(size*.48+1.5);doc.text(line,margin,y);y+=size*.48+1.5;}y+=2;};
+ const heading=s=>{y+=4;space(20);text(s,13,[37,31,33],true);};
+ const link=(label,url)=>{space(12);doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(22,106,91);doc.textWithLink(label,margin,y,{url});y+=7;};
+ doc.setProperties({title:w.title+' | MNAC-cruïlla',subject:'Obra y búsquedas bibliográficas',author:'MNAC-cruïlla',creator:'MNAC-cruïlla'});
+ text('MNAC-cruïlla',11,[22,106,91],true);
+ text('Obra y búsquedas bibliográficas',22,[37,31,33],true);
+ text('Exportado el '+date+' · DIN A4',9,[88,82,84]);
+ doc.setDrawColor(224,227,225);doc.line(margin,y,width-margin,y);y+=10;
+ text(w.title,20,[37,31,33],true);
+ text(artist||'Artista no identificado',12,[88,82,84]);
+ if(w.info&&w.info.length){heading('Datos de la obra');w.info.forEach(info=>text(info,10));}
+ if(w.dept)text('Departamento: '+w.dept,10,[88,82,84]);
+ heading('Ficha de la colección');link('Abrir ficha en el MNAC',w.href);
+ heading('Búsqueda seleccionada');
+ const modes={artist:'Solo artista',both:'Artista + obra',title:'Solo título'};
+ text('Criterio: '+modes[mode],10,[88,82,84]);text(query,12,[37,31,33],true);
+ heading('Libros y publicaciones');
+ const eq=encodeURIComponent(query),meq=encodeURIComponent(mdcQuery);
+ link('OPAC de la biblioteca del MNAC','https://biblioteca.museunacional.cat/discovery/search?query=any,contains,'+eq+'&tab=LibraryCatalog&search_scope=MNAC_P&vid=34CSUC_INSTB:MNAC&lang=ca');
+ link('Catálogo colectivo CCUC','https://ccuc.csuc.cat/discovery/search?query=any,contains,'+eq+'&vid=34CSUC_NETWORK:CSUC_CCUC_UNION&tab=TOT&search_scope=DiscoveryNetwork&lang=ca&offset=0');
+ link('Libros digitalizados del MNAC (MDC)','https://mdc.csuc.cat/digital/collection/LlibresMNAC/search/searchterm/'+meq);
+ link('Buscar en todo el MDC','https://mdc.csuc.cat/digital/search/searchterm/'+meq);
+ text('Enlaces pulsables: abren búsquedas en el navegador. No son una lista de libros encontrados ni una comprobación de disponibilidad.',9,[88,82,84]);
+ space(62);heading('Cómo consultar los catálogos');
+ text('CCUC puede tardar unos segundos. Si no aparecen resultados, abre su buscador, escribe el término indicado, selecciona "Tot" y pulsa la lupa. Después puedes filtrar por tipo de recurso.',10);
+ text('La colección digitalizada del MNAC es pequeña. Si no hay coincidencias, prueba la búsqueda en todo el MDC. Si un enlace no funciona dentro de WhatsApp, ábrelo en Safari, Chrome o Firefox.',10);
+ link('Inicio OPAC MNAC','https://biblioteca.museunacional.cat/discovery/search?vid=34CSUC_INSTB%3AMNAC&lang=ca');
+ link('Inicio CCUC','https://ccuc.csuc.cat/discovery/search?vid=34CSUC_NETWORK%3ACSUC_CCUC_UNION&lang=ca');
+ link('Inicio libros digitalizados','https://mdc.csuc.cat/digital/collection/LlibresMNAC');
+ heading('Sobre este documento');
+ text('Prototipo independiente, no oficial del MNAC. Exporta los datos disponibles de la obra y las búsquedas del apartado 2 en el momento de pulsar el botón. Los catálogos se consultan en sus propias webs; no se descargan ni se extraen sus resultados.',9,[88,82,84]);
+ text('La imagen de la obra se consulta en su ficha original del MNAC. Este PDF conserva los datos y los enlaces, sin reproducir la imagen.',9,[88,82,84]);
+ for(let p=1;p<=doc.getNumberOfPages();p++){doc.setPage(p);doc.setDrawColor(224,227,225);doc.line(margin,height-17,width-margin,height-17);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(88,82,84);doc.text('MNAC-cruïlla · Prototipo',margin,height-11);doc.text(p+' / '+doc.getNumberOfPages(),width-margin,height-11,{align:'right'});}
+ const filename='cruilla-'+w.title.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').slice(0,70)+'.pdf';
+ doc.save(filename);status.textContent='PDF generado. Si tu navegador lo abre en vez de descargarlo, usa Compartir o Guardar en archivos.';
+ }catch(err){status.textContent='No se ha podido generar el PDF. Vuelve a intentarlo en Chrome, Safari o Firefox.';}
+}
+
 </script></main></body></html>
