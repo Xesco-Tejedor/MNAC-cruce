@@ -37,6 +37,12 @@ h2{font-size:1.1rem;margin:0 0 8px}
 const $=id=>document.getElementById(id),esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const B='https://www.museunacional.cat',sleep=ms=>new Promise(r=>setTimeout(r,ms)),MAXP=40;
 let run=0,works=[],cur=null,mode='artist';
+const workURL=href=>{
+ const raw=String(href).trim().replace(/^https?\/\//i,'https://');
+ const url=new URL(raw,B);
+ if(url.origin!==B||!url.pathname.includes('/colleccio/'))throw new Error('Enlace de obra no válido');
+ return url.href;
+};
 const parse=async u=>new DOMParser().parseFromString(await (await fetch(u)).text(),'text/html');
 $('f').onsubmit=async e=>{e.preventDefault();const q=$('q').value.trim();if(!q)return;
  const my=++run;works=[];cur=null;$('obras').innerHTML='';$('libros').textContent='Elige una obra de la lista.';$('stat').textContent='Buscando…';
@@ -44,7 +50,7 @@ $('f').onsubmit=async e=>{e.preventDefault();const q=$('q').value.trim();if(!q)r
  try{for(;p<MAXP;p++){
   const d=await parse(B+'/ca/search/content/'+encodeURIComponent(q)+(p?'?page='+p:''));if(my!==run)return;
   const gs=[...d.querySelectorAll('.group-search-result')];if(!gs.length)break;
-  for(const g of gs){const a=g.querySelector('a[href*="/colleccio/"]');if(!a)continue;const h=a.getAttribute('href');if(seen.has(h))continue;seen.add(h);
+  for(const g of gs){const a=g.querySelector('a[href*="/colleccio/"]');if(!a)continue;let h;try{h=workURL(a.getAttribute('href'));}catch(err){continue;}if(seen.has(h))continue;seen.add(h);
    const t=g.querySelector('h2'),im=g.parentElement.querySelector('img');
    const w={href:h,title:t?t.textContent.trim():'Obra',img:im?im.src:'',artist:(h.split('/')[h.split('/').indexOf('colleccio')+2]||'').replace(/-/g,' ')};works.push(w);
    $('obras').insertAdjacentHTML('beforeend',`<div class="it" data-i="${works.length-1}">${w.img?`<img src="${esc(w.img)}" alt="" loading="lazy">`:''}<div><b>${esc(w.title)}</b><small>${esc(w.artist)}</small></div></div>`);}
@@ -57,7 +63,7 @@ $('f').onsubmit=async e=>{e.preventDefault();const q=$('q').value.trim();if(!q)r
 $('obras').onclick=e=>{const it=e.target.closest('.it');if(it)pick(+it.dataset.i);};
 async function pick(i){const w=works[i];cur=w;document.querySelectorAll('.it').forEach(x=>x.classList.toggle('sel',+x.dataset.i===i));
  $('libros').innerHTML='<p>Cargando datos de la obra…</p>';
- try{const d=await parse(B+w.href);if(cur!==w)return;const t=s=>[...d.querySelectorAll(s)].map(x=>x.textContent.replace(/\s+/g,' ').trim()).filter(Boolean);
+ try{const d=await parse(w.href);if(cur!==w)return;const t=s=>[...d.querySelectorAll(s)].map(x=>x.textContent.replace(/\s+/g,' ').trim()).filter(Boolean);
   w.artistName=(t('.field-name-field-piece-authors-author')[0])||'';w.info=t('.field-name-field-piece-info-content');
   const tech=t('.group_piece_technical')[0]||'';w.dept=(tech.match(/^(Art [A-Za-zÀ-ÿ]+|Romànic|Gòtic|Renaixement i Barroc|Dibuixos i gravats|Numismàtica|Fotografia)/)||[''])[0];
   w.big=(d.querySelector('meta[property="og:image"]')||{}).content||w.img;}catch(err){}
@@ -67,7 +73,7 @@ function render(){const w=cur,ar=w.artistName||w.artist,ti=w.title;
  const chip=(m,l)=>`<span class="chip${mode===m?' on':''}" data-m="${m}" role="button">${l}</span>`;
  $('libros').innerHTML=`${w.big?`<img class="big" src="${esc(w.big)}" alt="">`:''}<h3 style="margin:8px 0 0">${esc(ti)}</h3>
  <div class="meta">${esc(ar)}${w.info&&w.info.length?'<br>'+w.info.map(esc).join(' · '):''}</div>
- <a class="btn sec" target="_blank" rel="noopener" href="${B+esc(w.href)}">Ficha en el MNAC</a>
+ <a class="btn sec" target="_blank" rel="noopener" href="${esc(w.href)}">Ficha en el MNAC</a>
  <p style="margin:14px 0 0">Buscar libros por:</p><div class="chips" id="chips">${chip('artist','Solo artista')}${chip('both','Artista + obra')}${chip('title','Solo título')}</div>
  <p class="stat">Búsqueda: «${esc(q)}»</p><div class="row">
  <a class="btn" target="_blank" rel="noopener" href="https://biblioteca.museunacional.cat/discovery/search?query=any,contains,${eq}&tab=LibraryCatalog&search_scope=MNAC_P&vid=34CSUC_INSTB:MNAC&lang=ca">Abrir OPAC MNAC ↗</a>
