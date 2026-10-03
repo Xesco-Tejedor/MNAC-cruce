@@ -36,7 +36,7 @@ h2{font-size:1.1rem;margin:0 0 8px}
 <script>
 const $=id=>document.getElementById(id),esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const B='https://www.museunacional.cat',sleep=ms=>new Promise(r=>setTimeout(r,ms)),MAXP=40;
-let run=0,works=[],cur=null,mode='both';
+let run=0,works=[],cur=null,mode='artist';
 const parse=async u=>new DOMParser().parseFromString(await (await fetch(u)).text(),'text/html');
 $('f').onsubmit=async e=>{e.preventDefault();const q=$('q').value.trim();if(!q)return;
  const my=++run;works=[];cur=null;$('obras').innerHTML='';$('libros').textContent='Elige una obra de la lista.';$('stat').textContent='Buscando…';
@@ -68,7 +68,7 @@ function render(){const w=cur,ar=w.artistName||w.artist,ti=w.title;
  $('libros').innerHTML=`${w.big?`<img class="big" src="${esc(w.big)}" alt="">`:''}<h3 style="margin:8px 0 0">${esc(ti)}</h3>
  <div class="meta">${esc(ar)}${w.info&&w.info.length?'<br>'+w.info.map(esc).join(' · '):''}</div>
  <a class="btn sec" target="_blank" rel="noopener" href="${B+esc(w.href)}">Ficha en el MNAC</a>
- <p style="margin:14px 0 0">Buscar libros por:</p><div class="chips" id="chips">${chip('both','Artista + obra')}${chip('artist','Solo artista')}${chip('title','Solo título')}</div>
+ <p style="margin:14px 0 0">Buscar libros por:</p><div class="chips" id="chips">${chip('artist','Solo artista')}${chip('both','Artista + obra')}${chip('title','Solo título')}</div>
  <p class="stat">Búsqueda: «${esc(q)}»</p><div class="row">
  <a class="btn" target="_blank" rel="noopener" href="https://biblioteca.museunacional.cat/discovery/search?query=any,contains,${eq}&tab=Everything&search_scope=MyInst_and_CI&vid=34CSUC_INSTB:MNAC&lang=ca">Biblioteca MNAC (OPAC)</a>
  <a class="btn sec" target="_blank" rel="noopener" href="https://ccuc.csuc.cat/discovery/search?query=any,contains,${eq}&vid=34CSUC_NETWORK:CSUC_CCUC_UNION">Catálogo colectivo CCUC</a>
