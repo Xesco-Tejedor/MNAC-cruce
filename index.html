@@ -5,7 +5,7 @@
 <style>
 :root{--bg:#0f1115;--card:#181b22;--tx:#e8e8ea;--mut:#9aa0ab;--ac:#c8102e;--ln:#2a2f3a}
 *{box-sizing:border-box}body{margin:0;font:16px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--tx)}
-main{max-width:900px;margin:0 auto;padding:20px}
+main{max-width:1100px;margin:0 auto;padding:20px}
 h1{font-size:1.5rem;margin:.2em 0}p.sub{color:var(--mut);margin-top:0}
 form{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}
 input{flex:1;min-width:200px;padding:12px;border-radius:8px;border:1px solid var(--ln);background:var(--card);color:var(--tx);font-size:1rem}
@@ -18,34 +18,60 @@ h2{font-size:1.1rem;margin:0 0 8px}
 .it a{color:#fff}.it small{color:var(--mut);display:block}
 .note{color:var(--mut);font-size:.85rem;margin-top:14px}
 .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.scroll{max-height:68vh;overflow-y:auto;padding-right:6px}
+.it{cursor:pointer;align-items:center}.it:hover,.it.sel{background:#222733}.it.sel{outline:2px solid var(--ac);border-radius:8px}
+.it b{font-weight:600}.stat{color:var(--mut);font-size:.85rem;margin:0 0 6px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}.chip{padding:6px 12px;border-radius:99px;background:#2a2f3a;font-size:.9rem}.chip.on{background:var(--ac)}
+.big{width:100%;max-height:240px;object-fit:contain;background:#000;border-radius:8px}
+.meta{color:var(--mut);font-size:.9rem;margin:6px 0}@media(max-width:700px){.scroll{max-height:50vh}}
 </style></head><body><main>
 <h1>MNAC: obras + biblioteca</h1>
-<p class="sub">Busca un término (artista, obra, tema) y ve a la vez las obras de la colección del MNAC y los enlaces a los catálogos de libros y publicaciones.</p>
+<p class="sub">Busca un término, elige una obra de la colección y obtén las búsquedas de libros y publicaciones basadas en esa obra concreta.</p>
 <form id="f"><input id="q" placeholder="Ej.: Ramon Casas, Gaudí, Romànic" required><button>Buscar</button></form>
 <div class="cols">
-<section><h2>Obras de la colección (MNAC)</h2><div id="obras">Escribe un término.</div></section>
-<section><h2>Libros y publicaciones</h2><div id="libros">Escribe un término.</div></section>
+<section><h2>1. Obras de la colección (MNAC)</h2><p class="stat" id="stat"></p><div id="obras" class="scroll">Escribe un término.</div></section>
+<section><h2>2. Libros y publicaciones de la obra elegida</h2><div id="libros">Elige una obra de la lista.</div></section>
 </div>
-<p class="note">Las obras se consultan en vivo en museunacional.cat. El catálogo de la biblioteca (OPAC) y el catálogo colectivo CCUC no permiten consultas automáticas según su robots.txt, así que se abren con tu término en su propio buscador.</p>
+<p class="note">Las obras se consultan en vivo en museunacional.cat, página a página y con pausas, solo cuando pulsas Buscar. El catálogo de la biblioteca (OPAC) y el colectivo CCUC no permiten consultas automáticas según su robots.txt, así que se abren con los datos de la obra en su propio buscador.</p>
 <script>
-const $=id=>document.getElementById(id), esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const $=id=>document.getElementById(id),esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const B='https://www.museunacional.cat',sleep=ms=>new Promise(r=>setTimeout(r,ms)),MAXP=40;
+let run=0,works=[],cur=null,mode='both';
+const parse=async u=>new DOMParser().parseFromString(await (await fetch(u)).text(),'text/html');
 $('f').onsubmit=async e=>{e.preventDefault();const q=$('q').value.trim();if(!q)return;
- const eq=encodeURIComponent(q);
- $('libros').innerHTML=`<p>Abre la búsqueda de «${esc(q)}» en:</p><div class="row">
+ const my=++run;works=[];cur=null;$('obras').innerHTML='';$('libros').textContent='Elige una obra de la lista.';$('stat').textContent='Buscando…';
+ const seen=new Set();let p=0;
+ try{for(;p<MAXP;p++){
+  const d=await parse(B+'/ca/search/content/'+encodeURIComponent(q)+(p?'?page='+p:''));if(my!==run)return;
+  const gs=[...d.querySelectorAll('.group-search-result')];if(!gs.length)break;
+  for(const g of gs){const a=g.querySelector('a[href*="/colleccio/"]');if(!a)continue;const h=a.getAttribute('href');if(seen.has(h))continue;seen.add(h);
+   const t=g.querySelector('h2'),im=g.parentElement.querySelector('img');
+   const w={href:h,title:t?t.textContent.trim():'Obra',img:im?im.src:'',artist:(h.split('/')[4]||'').replace(/-/g,' ')};works.push(w);
+   $('obras').insertAdjacentHTML('beforeend',`<div class="it" data-i="${works.length-1}">${w.img?`<img src="${esc(w.img)}" alt="" loading="lazy">`:''}<div><b>${esc(w.title)}</b><small>${esc(w.artist)}</small></div></div>`);}
+  $('stat').textContent=`${works.length} obras (página ${p+1})…`;await sleep(350);}
+ }catch(err){$('stat').textContent='Error al consultar el MNAC; mostrando lo cargado.';}
+ if(my!==run)return;
+ if(!works.length)$('obras').innerHTML='<p>Sin obras de la colección para este término. Prueba en catalán o con el apellido del artista.</p>';
+ $('stat').textContent=works.length?`${works.length} obras. Elige una.`+(p>=MAXP?` (límite de ${MAXP} páginas)`:''):'';
+};
+$('obras').onclick=e=>{const it=e.target.closest('.it');if(it)pick(+it.dataset.i);};
+async function pick(i){const w=works[i];cur=w;document.querySelectorAll('.it').forEach(x=>x.classList.toggle('sel',+x.dataset.i===i));
+ $('libros').innerHTML='<p>Cargando datos de la obra…</p>';
+ try{const d=await parse(B+w.href);if(cur!==w)return;const t=s=>[...d.querySelectorAll(s)].map(x=>x.textContent.replace(/\s+/g,' ').trim()).filter(Boolean);
+  w.artistName=(t('.field-name-field-piece-authors-author')[0])||'';w.info=t('.field-name-field-piece-info-content');
+  const tech=t('.group_piece_technical')[0]||'';w.dept=(tech.match(/^(Art [A-Za-zÀ-ÿ]+|Romànic|Gòtic|Renaixement i Barroc|Dibuixos i gravats|Numismàtica|Fotografia)/)||[''])[0];
+  w.big=(d.querySelector('meta[property="og:image"]')||{}).content||w.img;}catch(err){}
+ if(cur===w)render();}
+function render(){const w=cur,ar=w.artistName||w.artist,ti=w.title;
+ const qs={both:[ar,ti].filter(Boolean).join(' '),artist:ar,title:ti};const q=qs[mode]||qs.both,eq=encodeURIComponent(q);
+ const chip=(m,l)=>`<span class="chip${mode===m?' on':''}" data-m="${m}" role="button">${l}</span>`;
+ $('libros').innerHTML=`${w.big?`<img class="big" src="${esc(w.big)}" alt="">`:''}<h3 style="margin:8px 0 0">${esc(ti)}</h3>
+ <div class="meta">${esc(ar)}${w.info&&w.info.length?'<br>'+w.info.map(esc).join(' · '):''}</div>
+ <a class="btn sec" target="_blank" rel="noopener" href="${B+esc(w.href)}">Ficha en el MNAC</a>
+ <p style="margin:14px 0 0">Buscar libros por:</p><div class="chips" id="chips">${chip('both','Artista + obra')}${chip('artist','Solo artista')}${chip('title','Solo título')}</div>
+ <p class="stat">Búsqueda: «${esc(q)}»</p><div class="row">
  <a class="btn" target="_blank" rel="noopener" href="https://biblioteca.museunacional.cat/discovery/search?query=any,contains,${eq}&tab=Everything&search_scope=MyInst_and_CI&vid=34CSUC_INSTB:MNAC&lang=ca">Biblioteca MNAC (OPAC)</a>
  <a class="btn sec" target="_blank" rel="noopener" href="https://ccuc.csuc.cat/discovery/search?query=any,contains,${eq}&vid=34CSUC_NETWORK:CSUC_CCUC_UNION">Catálogo colectivo CCUC</a>
  <a class="btn sec" target="_blank" rel="noopener" href="https://mdc.csuc.cat/digital/collection/LlibresMNAC/search/searchterm/${eq}">Libros digitalizados MNAC</a></div>`;
- $('obras').textContent='Buscando…';
- try{
-  const r=await fetch('https://www.museunacional.cat/ca/search/content/'+eq);
-  const d=new DOMParser().parseFromString(await r.text(),'text/html');
-  const out=[];
-  d.querySelectorAll('.group-search-result').forEach(g=>{
-   const a=g.querySelector('a[href*="/colleccio/"]');if(!a)return;
-   const t=g.querySelector('h2'),im=g.parentElement.querySelector('img');
-   out.push(`<div class="it">${im?`<img src="${esc(im.src)}" alt="">`:''}<div><a target="_blank" rel="noopener" href="https://www.museunacional.cat${esc(a.getAttribute('href'))}">${esc(t?t.textContent.trim():'Obra')}</a></div></div>`);});
-  $('obras').innerHTML=out.length?out.join(''):'<p>Sin obras de la colección para este término. Prueba en catalán o con el apellido del artista.</p>';
-  $('obras').insertAdjacentHTML('beforeend',`<div class="row"><a class="btn sec" target="_blank" rel="noopener" href="https://www.museunacional.cat/ca/search/content/${eq}">Ver todos en museunacional.cat</a></div>`);
- }catch(err){$('obras').innerHTML=`<p>No se pudo consultar el MNAC desde el navegador.</p><div class="row"><a class="btn sec" target="_blank" rel="noopener" href="https://www.museunacional.cat/ca/search/content/${eq}">Abrir búsqueda en museunacional.cat</a></div>`;}
-};
+ $('chips').onclick=e=>{const c=e.target.closest('.chip');if(c){mode=c.dataset.m;render();}};}
 </script></main></body></html>
